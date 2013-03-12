@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -69,12 +70,12 @@ namespace Migrate
             var destinationItems = GetAllItems(destinationContext, destinationList);
 
             Console.WriteLine("Mapping items ...");
-            var itemMappings = from sourceItem in sourceItems
+            var itemMappings = (from sourceItem in sourceItems
                                from destinationItem in destinationItems
                                where (string)sourceItem["Title"] == (string)destinationItem["Title"]
                                let lookups = ExtractLookupIds(sourceItem[sourceLookup.InternalName])
                                select
-                                   new
+                                   new MasterItemMapping
                                        {
                                            SourceId = sourceItem.Id,
                                            SourceTitle = (string)sourceItem["Title"],
@@ -82,13 +83,48 @@ namespace Migrate
                                            DestinationId = destinationItem.Id,
                                            DestinationTitle = (string)destinationItem["Title"],
                                            DestinationLookupIds  = GetCorrespondingLookups(lookupMappings, lookups).ToArray()
-                                       };
+                                       }).ToList();
 
-            
+            Console.WriteLine("Checking for duplicates ...");
+            var duplicates = itemMappings.GroupBy(i => i.SourceId).Where(g => g.Count() > 1).ToList();
+            foreach (var duplicate in duplicates)
+            {
+                Console.WriteLine("Duplicate: " + duplicate.Key + " => " + string.Join(", ", duplicate.Select(d => d.DestinationId)));
+            }
+            if(duplicates.Any())
+            {
+                Environment.Exit(1);
+            }
+
+            if(options.Simulate)
+            {
+                PrintMappings(itemMappings);
+            }
+            else
+            {
+                UpdateMappingsAtDestination(itemMappings.ToDictionary(i => i.SourceId, i => i), destinationItems, options.Lookup);
+            }
+        }
+
+        private static void PrintMappings(IEnumerable<dynamic> itemMappings)
+        {
             Console.WriteLine("Source\t\tDestination");
             foreach (var itemMapping in itemMappings)
             {
-                Console.WriteLine("s:{0}-\"{1}\" sl:{2} \t d:{3}-\"{4}\" dl:{5}", itemMapping.SourceId, itemMapping.SourceTitle, string.Join(", ", itemMapping.SourceLookupIds), itemMapping.DestinationId, itemMapping.DestinationTitle, string.Join(", ", itemMapping.DestinationLookupIds));
+                Console.WriteLine("s:{0}-\"{1}\" sl:{2} \t d:{3}-\"{4}\" dl:{5}", itemMapping.SourceId, itemMapping.SourceTitle,
+                                  string.Join<int>(", ", itemMapping.SourceLookupIds), itemMapping.DestinationId,
+                                  itemMapping.DestinationTitle, string.Join<int>(", ", itemMapping.DestinationLookupIds));
+            }
+        }
+
+        private static void UpdateMappingsAtDestination(Dictionary<int, MasterItemMapping> itemMappings, IEnumerable<ListItem> destinationItems, string lookup)
+        {
+            Console.WriteLine("Updating lookup values ...");
+
+            foreach (var destinationItem in destinationItems)
+            {
+                destinationItem[lookup] = itemMappings[destinationItem.Id].SourceLookupIds;
+                destinationItem.Update();
             }
         }
 
@@ -167,6 +203,21 @@ namespace Migrate
 
             return sourceFields.ToList().SingleOrDefault(f => f.Title == lookupName);
         }
+    }
+
+    public class MasterItemMapping
+    {
+        public int SourceId { get; set; }
+
+        public string SourceTitle { get; set; }
+
+        public int[] SourceLookupIds { get; set; }
+
+        public int DestinationId { get; set; }
+
+        public string DestinationTitle { get; set; }
+
+        public int[] DestinationLookupIds { get; set; }
     }
 
     public class ListMappings
