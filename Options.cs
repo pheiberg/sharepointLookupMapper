@@ -1,4 +1,5 @@
-﻿using CommandLine;
+﻿using System.Collections.Generic;
+using CommandLine;
 using CommandLine.Text;
 
 namespace Migrate
@@ -11,7 +12,7 @@ namespace Migrate
         [Option('p', "password", HelpText = "The password for the user.")]
         public string Password { get; set; }
 
-        [Option('m', "master", HelpText = "The name of the master list to set the lookups in.", Required = true, DefaultValue = "VAT Codes")]
+        [Option('m', "master", HelpText = "The name of the master list to set the lookups in.", Required = true)]
         public string Master { get; set; }
         
         [Option('l', "lookup", HelpText = "The name of the lookup column.", Required = true)]
@@ -19,6 +20,12 @@ namespace Migrate
 
         [Option('s', "simulate", HelpText = "Only simulates the operation and prints out what would have been performed instead of actually changing the lookup values.")]
         public bool Simulate { get; set; }
+
+        [OptionList('i', "identifiers", HelpText = "(Default: Title). The columns that can uniquely identify an item in the list (instead of Id).", DefaultValue = new []{ "Title" }, Separator = ',')]
+        public IList<string> IdentifyingColumns { get; set; }
+        
+        [OptionList("lookup-identifiers", HelpText = "(Default: Title). The columns that can uniquely identify an item in the lookup list (instead of Id).", DefaultValue = new []{ "Title" }, Separator = ',')]
+        public IList<string> IdentifyingLookupColumns { get; set; }
 
         [ParserState]
         public IParserState LastParserState { get; set; }
