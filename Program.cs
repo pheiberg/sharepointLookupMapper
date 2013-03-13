@@ -51,7 +51,7 @@ namespace Migrate
             var destinationLookupItems = GetAllItems(destinationContext, destinationLookupList);
 
             Console.WriteLine("Mapping lookup tables ...");
-            IDictionary<int, ListMappings> lookupMappings = GetLookupMappings(sourceLookupItems, destinationLookupItems);
+            IDictionary<int, ListMappings> lookupMappings = GetLookupMappings(sourceLookupItems, destinationLookupItems, options.IdentifyingLookupColumns);
             
             Console.WriteLine("Checking for duplicates ...");
             var lookupDuplicates = lookupMappings.GroupBy(i => i.Value.SourceId).Where(g => g.Count() > 1).ToList();
@@ -96,7 +96,7 @@ namespace Migrate
 
         private static IList<MasterItemMapping> GetItemMappings(Field sourceLookup, IDictionary<int, ListMappings> lookupMappings, IEnumerable<ListItem> destinationItems, IEnumerable<ListItem> sourceItems, IEnumerable<string> identifyingColumns)
         {
-            Func<ListItem, ListItem, bool> isEqual = (source, destination) => identifyingColumns.All(column => (string)source[column] == (string)destination[column]);
+            Func<ListItem, ListItem, bool> isEqual = (source, destination) => identifyingColumns.All(column => source[column].Equals(destination[column]));
             return (from sourceItem in sourceItems
                     from destinationItem in destinationItems
                     where isEqual(sourceItem, destinationItem)
@@ -113,11 +113,12 @@ namespace Migrate
                             }).ToList();
         }
 
-        private static Dictionary<int, ListMappings> GetLookupMappings(IEnumerable<ListItem> sourceLookupItems, IEnumerable<ListItem> destinationLookupItems)
+        private static Dictionary<int, ListMappings> GetLookupMappings(IEnumerable<ListItem> sourceLookupItems, IEnumerable<ListItem> destinationLookupItems, IEnumerable<string> identifyingColumns)
         {
+            Func<ListItem, ListItem, bool> isEqual = (source, destination) => identifyingColumns.All(column => source[column].Equals(destination[column]));
             return (from sourceLookupItem in sourceLookupItems
                     from destinationLookupItem in destinationLookupItems
-                    where (string)sourceLookupItem["Title"] == (string)destinationLookupItem["Title"]
+                    where isEqual(sourceLookupItem, destinationLookupItem)
                     select new ListMappings
                                {
                                    SourceId = sourceLookupItem.Id,
