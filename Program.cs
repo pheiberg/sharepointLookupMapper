@@ -225,27 +225,4 @@ namespace Migrate
             return sourceFields.ToList().SingleOrDefault(f => f.Title == lookupName);
         }
     }
-
-    public class MasterItemMapping
-    {
-        public int SourceId { get; set; }
-
-        public string SourceTitle { get; set; }
-
-        public int[] SourceLookupIds { get; set; }
-
-        public int DestinationId { get; set; }
-
-        public string DestinationTitle { get; set; }
-
-        public int[] DestinationLookupIds { get; set; }
-    }
-
-    public class ListMappings
-    {
-        public int SourceId { get; set; }
-        public string SourceTitle { get; set; }
-        public int DestinationId { get; set; }
-        public string DestinationTitle { get; set; }
-    }
 }
