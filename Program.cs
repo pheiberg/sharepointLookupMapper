@@ -90,7 +90,7 @@ namespace Migrate
             }
             else
             {
-                UpdateMappingsAtDestination(itemMappings.ToDictionary(i => i.SourceId, i => i), destinationItems, options.Lookup);
+                UpdateMappingsAtDestination(itemMappings.ToDictionary(i => i.DestinationId, i => i), destinationItems, options.Lookup, (FieldLookup)destinationLookup);
             }
         }
 
@@ -139,13 +139,20 @@ namespace Migrate
             }
         }
 
-        private static void UpdateMappingsAtDestination(Dictionary<int, MasterItemMapping> itemMappings, IEnumerable<ListItem> destinationItems, string lookup)
+        private static void UpdateMappingsAtDestination(Dictionary<int, MasterItemMapping> itemMappings, IEnumerable<ListItem> destinationItems, string lookup, FieldLookup destinationLookup)
         {
             Console.WriteLine("Updating lookup values ...");
 
-            foreach (var destinationItem in destinationItems)
+            foreach (var destinationItem in destinationItems.Where(item => itemMappings.ContainsKey(item.Id)))
             {
-                destinationItem[lookup] = itemMappings[destinationItem.Id].SourceLookupIds;
+                var mapping = itemMappings[destinationItem.Id];
+
+                if(!mapping.DestinationLookupIds.Any() || !mapping.SourceLookupIds.Any())
+                    continue;
+
+                object value = destinationLookup.AllowMultipleValues ? (object) mapping.DestinationLookupIds.Select( id => new FieldLookupValue { LookupId = id} )
+                                   : new FieldLookupValue { LookupId = mapping.DestinationLookupIds.First() };
+                destinationItem[lookup] = value;
                 destinationItem.Update();
             }
         }
