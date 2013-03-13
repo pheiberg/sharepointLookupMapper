@@ -42,12 +42,12 @@ namespace Migrate
             var destinationLookup = GetLookupField(destinationContext, destinationList, options.Lookup);
             ValidateLookupField(destinationLookup, "destination", options.Lookup);
 
-            Console.WriteLine("Loading source lookup items ...");
             var sourceLookupList = GetList(sourceContext, sourceWeb, new Guid(((FieldLookup)(sourceLookup)).LookupList));
+            Console.WriteLine("Loading source lookup items from {0} ...", sourceLookupList.Title);
             var sourceLookupItems = GetAllItems(sourceContext, sourceLookupList);
 
-            Console.WriteLine("Loading destination lookup items ...");
             var destinationLookupList = GetList(destinationContext, destinationWeb, new Guid(((FieldLookup)(destinationLookup)).LookupList));
+            Console.WriteLine("Loading destination lookup items from {0} ...", destinationLookupList.Title);
             var destinationLookupItems = GetAllItems(destinationContext, destinationLookupList);
 
             Console.WriteLine("Mapping lookup tables ...");
