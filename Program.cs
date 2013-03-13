@@ -52,6 +52,17 @@ namespace Migrate
 
             Console.WriteLine("Mapping lookup tables ...");
             IDictionary<int, ListMappings> lookupMappings = GetLookupMappings(sourceLookupItems, destinationLookupItems);
+            
+            Console.WriteLine("Checking for duplicates ...");
+            var lookupDuplicates = lookupMappings.GroupBy(i => i.Value.SourceId).Where(g => g.Count() > 1).ToList();
+            foreach (var duplicate in lookupDuplicates)
+            {
+                Console.WriteLine("Lookup duplicate: " + duplicate.Key + " => " + string.Join(", ", duplicate.Select(d => d.Value.DestinationId)));
+            }
+            if (lookupDuplicates.Any())
+            {
+                Environment.Exit(1);
+            }
 
             Console.WriteLine("Loading source items ...");
             var sourceItems = GetAllItems(sourceContext, sourceList);
@@ -66,7 +77,7 @@ namespace Migrate
             var duplicates = itemMappings.GroupBy(i => i.SourceId).Where(g => g.Count() > 1).ToList();
             foreach (var duplicate in duplicates)
             {
-                Console.WriteLine("Duplicate: " + duplicate.Key + " => " + string.Join(", ", duplicate.Select(d => d.DestinationId)));
+                Console.WriteLine("Master duplicate: " + duplicate.Key + " => " + string.Join(", ", duplicate.Select(d => d.DestinationId)));
             }
             if(duplicates.Any())
             {
