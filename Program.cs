@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -52,16 +51,7 @@ namespace Migrate
             var destinationLookupItems = GetAllItems(destinationContext, destinationLookupList);
 
             Console.WriteLine("Mapping lookup tables ...");
-            var lookupMappings = (from sourceLookupItem in sourceLookupItems
-                                 from destinationLookupItem in destinationLookupItems
-                                 where (string)sourceLookupItem["Title"] == (string)destinationLookupItem["Title"]
-                                 select new ListMappings
-                                 {
-                                     SourceId = sourceLookupItem.Id,
-                                     SourceTitle = (string)sourceLookupItem["Title"],
-                                     DestinationId = destinationLookupItem.Id,
-                                     DestinationTitle = (string)destinationLookupItem["Title"],
-                                 }).ToDictionary(item => item.SourceId, item => item);
+            IDictionary<int, ListMappings> lookupMappings = GetLookupMappings(sourceLookupItems, destinationLookupItems);
 
             Console.WriteLine("Loading source items ...");
             var sourceItems = GetAllItems(sourceContext, sourceList);
@@ -70,20 +60,7 @@ namespace Migrate
             var destinationItems = GetAllItems(destinationContext, destinationList);
 
             Console.WriteLine("Mapping items ...");
-            var itemMappings = (from sourceItem in sourceItems
-                               from destinationItem in destinationItems
-                               where (string)sourceItem["Title"] == (string)destinationItem["Title"]
-                               let lookups = ExtractLookupIds(sourceItem[sourceLookup.InternalName])
-                               select
-                                   new MasterItemMapping
-                                       {
-                                           SourceId = sourceItem.Id,
-                                           SourceTitle = (string)sourceItem["Title"],
-                                           SourceLookupIds = lookups,
-                                           DestinationId = destinationItem.Id,
-                                           DestinationTitle = (string)destinationItem["Title"],
-                                           DestinationLookupIds  = GetCorrespondingLookups(lookupMappings, lookups).ToArray()
-                                       }).ToList();
+            IList<MasterItemMapping> itemMappings = GetItemMappings(sourceLookup, lookupMappings, destinationItems, sourceItems, options.IdentifyingColumns);
 
             Console.WriteLine("Checking for duplicates ...");
             var duplicates = itemMappings.GroupBy(i => i.SourceId).Where(g => g.Count() > 1).ToList();
@@ -104,6 +81,39 @@ namespace Migrate
             {
                 UpdateMappingsAtDestination(itemMappings.ToDictionary(i => i.SourceId, i => i), destinationItems, options.Lookup);
             }
+        }
+
+        private static IList<MasterItemMapping> GetItemMappings(Field sourceLookup, IDictionary<int, ListMappings> lookupMappings, IEnumerable<ListItem> destinationItems, IEnumerable<ListItem> sourceItems, IEnumerable<string> identifyingColumns)
+        {
+            Func<ListItem, ListItem, bool> isEqual = (source, destination) => identifyingColumns.All(column => (string)source[column] == (string)destination[column]);
+            return (from sourceItem in sourceItems
+                    from destinationItem in destinationItems
+                    where isEqual(sourceItem, destinationItem)
+                    let lookups = ExtractLookupIds(sourceItem[sourceLookup.InternalName])
+                    select
+                        new MasterItemMapping
+                            {
+                                SourceId = sourceItem.Id,
+                                SourceTitle = (string)sourceItem["Title"],
+                                SourceLookupIds = lookups,
+                                DestinationId = destinationItem.Id,
+                                DestinationTitle = (string)destinationItem["Title"],
+                                DestinationLookupIds  = GetCorrespondingLookups(lookupMappings, lookups).ToArray()
+                            }).ToList();
+        }
+
+        private static Dictionary<int, ListMappings> GetLookupMappings(IEnumerable<ListItem> sourceLookupItems, IEnumerable<ListItem> destinationLookupItems)
+        {
+            return (from sourceLookupItem in sourceLookupItems
+                    from destinationLookupItem in destinationLookupItems
+                    where (string)sourceLookupItem["Title"] == (string)destinationLookupItem["Title"]
+                    select new ListMappings
+                               {
+                                   SourceId = sourceLookupItem.Id,
+                                   SourceTitle = (string)sourceLookupItem["Title"],
+                                   DestinationId = destinationLookupItem.Id,
+                                   DestinationTitle = (string)destinationLookupItem["Title"],
+                               }).ToDictionary(item => item.SourceId, item => item);
         }
 
         private static void PrintMappings(IEnumerable<dynamic> itemMappings)
@@ -172,7 +182,7 @@ namespace Migrate
             return sourceList;
         }
 
-        private static IEnumerable<ListItem> GetAllItems(ClientRuntimeContext context, List list)
+        private static IList<ListItem> GetAllItems(ClientRuntimeContext context, List list)
         {
             var items = list.GetItems(CamlQuery.CreateAllItemsQuery());
             context.Load(items);
