@@ -12,6 +12,7 @@ namespace Migrate
         private static NetworkCredential _networkCredential;
         private const string SourceSiteUrl = "http://lsc.alfalaval.org/sites/c_ciis/c_one/One4AL%20Test/";
         private const string TargetSiteUrl = "http://work.alfalaval.org/temporary/one4al";
+        const int BatchSize = 200;
 
         static void Main(string[] args)
         {
@@ -90,7 +91,7 @@ namespace Migrate
             }
             else
             {
-                UpdateMappingsAtDestination(itemMappings.ToDictionary(i => i.DestinationId, i => i), destinationItems, options.Lookup, (FieldLookup)destinationLookup);
+                UpdateMappingsAtDestination(itemMappings.ToDictionary(i => i.DestinationId, i => i), destinationItems, options.Lookup, (FieldLookup)destinationLookup, destinationContext);
             }
         }
 
@@ -139,10 +140,11 @@ namespace Migrate
             }
         }
 
-        private static void UpdateMappingsAtDestination(Dictionary<int, MasterItemMapping> itemMappings, IEnumerable<ListItem> destinationItems, string lookup, FieldLookup destinationLookup)
+        private static void UpdateMappingsAtDestination(Dictionary<int, MasterItemMapping> itemMappings, IEnumerable<ListItem> destinationItems, string lookup, FieldLookup destinationLookup, ClientContext destinationContext)
         {
             Console.WriteLine("Updating lookup values ...");
 
+            int batchedItems = 0;
             foreach (var destinationItem in destinationItems.Where(item => itemMappings.ContainsKey(item.Id)))
             {
                 var mapping = itemMappings[destinationItem.Id];
@@ -152,8 +154,20 @@ namespace Migrate
 
                 object value = destinationLookup.AllowMultipleValues ? (object) mapping.DestinationLookupIds.Select( id => new FieldLookupValue { LookupId = id} )
                                    : new FieldLookupValue { LookupId = mapping.DestinationLookupIds.First() };
-                destinationItem[lookup] = value;
+                destinationItem[destinationLookup.InternalName] = value;
                 destinationItem.Update();
+                batchedItems++;
+                
+                if(batchedItems % BatchSize == 0)
+                {
+                    destinationContext.ExecuteQuery();
+                    batchedItems = 0;
+                }
+            }
+            
+            if(batchedItems > 0)
+            {
+                destinationContext.ExecuteQuery();
             }
         }
 
