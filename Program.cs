@@ -91,7 +91,7 @@ namespace Migrate
             }
             else
             {
-                UpdateMappingsAtDestination(itemMappings.ToDictionary(i => i.DestinationId, i => i), destinationItems, options.Lookup, (FieldLookup)destinationLookup, destinationContext);
+                UpdateMappingsAtDestination(itemMappings.ToDictionary(i => i.DestinationId, i => i), destinationItems, (FieldLookup)destinationLookup, destinationContext);
             }
         }
 
@@ -140,7 +140,7 @@ namespace Migrate
             }
         }
 
-        private static void UpdateMappingsAtDestination(Dictionary<int, MasterItemMapping> itemMappings, IEnumerable<ListItem> destinationItems, string lookup, FieldLookup destinationLookup, ClientContext destinationContext)
+        private static void UpdateMappingsAtDestination(Dictionary<int, MasterItemMapping> itemMappings, IEnumerable<ListItem> destinationItems, FieldLookup destinationLookup, ClientContext destinationContext)
         {
             Console.WriteLine("Updating lookup values ...");
 
