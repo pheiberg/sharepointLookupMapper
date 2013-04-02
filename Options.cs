@@ -27,6 +27,9 @@ namespace Migrate
         [OptionList("lookup-identifiers", HelpText = "(Default: Title). The columns that can uniquely identify an item in the lookup list (instead of Id).", DefaultValue = new []{ "Title" }, Separator = ',')]
         public IList<string> IdentifyingLookupColumns { get; set; }
 
+        [Option("page-size", DefaultValue = 5000, HelpText = "Number of items to fetch from main list at a time")]
+        public int PageSize { get; set; }
+
         [ParserState]
         public IParserState LastParserState { get; set; }
 

@@ -13,16 +13,11 @@ namespace Migrate
         private const string SourceSiteUrl = "http://lsc.alfalaval.org/sites/c_ciis/c_one/One4AL%20Test/";
         private const string TargetSiteUrl = "http://work.alfalaval.org/temporary/one4al";
         const int BatchSize = 200;
+        const int MaxListPageSize = 5000;
 
         static void Main(string[] args)
         {
-            var options = new Options();
-            var parser = new Parser(configuration =>
-                                        {
-                                            configuration.IgnoreUnknownArguments = false;
-                                            configuration.HelpWriter = Console.Error;
-                                        });
-            parser.ParseArgumentsStrict(args, options);
+            var options = GetOptions(args);
 
             _networkCredential = string.IsNullOrEmpty(options.User) ? CredentialCache.DefaultNetworkCredentials : new NetworkCredential(options.User, options.Password);
 
@@ -45,11 +40,11 @@ namespace Migrate
 
             var sourceLookupList = GetList(sourceContext, sourceWeb, new Guid(((FieldLookup)(sourceLookup)).LookupList));
             Console.WriteLine("Loading source lookup items from {0} ...", sourceLookupList.Title);
-            var sourceLookupItems = GetAllItems(sourceContext, sourceLookupList);
+            var sourceLookupItems = GetAllItems(sourceContext, sourceLookupList, options.PageSize);
 
             var destinationLookupList = GetList(destinationContext, destinationWeb, new Guid(((FieldLookup)(destinationLookup)).LookupList));
             Console.WriteLine("Loading destination lookup items from {0} ...", destinationLookupList.Title);
-            var destinationLookupItems = GetAllItems(destinationContext, destinationLookupList);
+            var destinationLookupItems = GetAllItems(destinationContext, destinationLookupList, options.PageSize);
 
             Console.WriteLine("Mapping lookup tables ...");
             IDictionary<int, ListMappings> lookupMappings = GetLookupMappings(sourceLookupItems, destinationLookupItems, options.IdentifyingLookupColumns);
@@ -66,10 +61,10 @@ namespace Migrate
             }
 
             Console.WriteLine("Loading source items ...");
-            var sourceItems = GetAllItems(sourceContext, sourceList);
+            var sourceItems = GetAllItems(sourceContext, sourceList, options.PageSize);
 
             Console.WriteLine("Loading destination items ...");
-            var destinationItems = GetAllItems(destinationContext, destinationList);
+            var destinationItems = GetAllItems(destinationContext, destinationList, options.PageSize);
 
             Console.WriteLine("Mapping items ...");
             IList<MasterItemMapping> itemMappings = GetItemMappings(sourceLookup, lookupMappings, destinationItems, sourceItems, options.IdentifyingColumns);
@@ -95,9 +90,26 @@ namespace Migrate
             }
         }
 
+        private static Options GetOptions(string[] args)
+        {
+            var options = new Options();
+            var parser = new Parser(configuration =>
+                                        {
+                                            configuration.IgnoreUnknownArguments = false;
+                                            configuration.HelpWriter = Console.Error;
+                                        });
+            parser.ParseArgumentsStrict(args, options);
+            if (options.PageSize > MaxListPageSize || options.PageSize < 1)
+            {
+                options.PageSize = MaxListPageSize;
+            }
+            return options;
+        }
+
         private static IList<MasterItemMapping> GetItemMappings(Field sourceLookup, IDictionary<int, ListMappings> lookupMappings, IEnumerable<ListItem> destinationItems, IEnumerable<ListItem> sourceItems, IEnumerable<string> identifyingColumns)
         {
-            Func<ListItem, ListItem, bool> isEqual = (source, destination) => identifyingColumns.All(column => source[column].Equals(destination[column]));
+            Func<ListItem, ListItem, bool> isEqual = (source, destination) => identifyingColumns.All(column => 
+                "Id".Equals(column, StringComparison.InvariantCultureIgnoreCase) ? source.Id == destination.Id : source[column].Equals(destination[column]));
             return (from sourceItem in sourceItems
                     from destinationItem in destinationItems
                     where isEqual(sourceItem, destinationItem)
@@ -152,7 +164,7 @@ namespace Migrate
                 if(!mapping.DestinationLookupIds.Any() || !mapping.SourceLookupIds.Any())
                     continue;
 
-                object value = destinationLookup.AllowMultipleValues ? (object) mapping.DestinationLookupIds.Select( id => new FieldLookupValue { LookupId = id} )
+                object value = destinationLookup.AllowMultipleValues ? (object) mapping.DestinationLookupIds.Select( id => new FieldLookupValue { LookupId = id} ).ToArray()
                                    : new FieldLookupValue { LookupId = mapping.DestinationLookupIds.First() };
                 destinationItem[destinationLookup.InternalName] = value;
                 destinationItem.Update();
@@ -215,12 +227,29 @@ namespace Migrate
             return sourceList;
         }
 
-        private static IList<ListItem> GetAllItems(ClientRuntimeContext context, List list)
+        private static IList<ListItem> GetAllItems(ClientRuntimeContext context, List list, int pageSize = MaxListPageSize)
         {
-            var items = list.GetItems(CamlQuery.CreateAllItemsQuery());
-            context.Load(items);
-            context.ExecuteQuery();
-            return items.ToList();
+            ListItemCollectionPosition position = null;
+            IEnumerable<ListItem> results = Enumerable.Empty<ListItem>();
+            
+            do
+            {
+                var query = new CamlQuery
+                {
+                    ListItemCollectionPosition = position,
+                    ViewXml = string.Format("<View Scope=\"RecursiveAll\"><Query></Query><RowLimit>{0}</RowLimit></View>", pageSize)
+                };
+
+                var items = list.GetItems(query);
+                context.Load(items);
+                context.ExecuteQuery();
+
+                position = items.ListItemCollectionPosition;
+                results = results.Concat(items);
+            } 
+            while (position != null);
+            
+            return results.ToList();
         }
 
         private static void ValidateLookupField(Field lookupField, string source, string lookupName)
