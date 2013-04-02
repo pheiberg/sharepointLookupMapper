@@ -55,11 +55,16 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="FieldLookupValueHandler.cs" />
+    <Compile Include="ILookupValueHandler.cs" />
     <Compile Include="ListMappings.cs" />
+    <Compile Include="LookupValueHandler.cs" />
+    <Compile Include="LookupValueHandlerFactory.cs" />
     <Compile Include="MasterItemMapping.cs" />
     <Compile Include="Options.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="UserLookupValueHandler.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />

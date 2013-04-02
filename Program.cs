@@ -14,6 +14,7 @@ namespace Migrate
         private const string TargetSiteUrl = "http://work.alfalaval.org/temporary/one4al";
         const int BatchSize = 200;
         const int MaxListPageSize = 5000;
+        private static readonly LookupValueHandlerFactory LookupValueHandlerFactory = new LookupValueHandlerFactory();
 
         static void Main(string[] args)
         {
@@ -108,12 +109,13 @@ namespace Migrate
 
         private static IList<MasterItemMapping> GetItemMappings(Field sourceLookup, IDictionary<int, ListMappings> lookupMappings, IEnumerable<ListItem> destinationItems, IEnumerable<ListItem> sourceItems, IEnumerable<string> identifyingColumns)
         {
+            var lookupValueHandler = LookupValueHandlerFactory.Create(sourceLookup.FieldTypeKind);
             Func<ListItem, ListItem, bool> isEqual = (source, destination) => identifyingColumns.All(column => 
                 "Id".Equals(column, StringComparison.InvariantCultureIgnoreCase) ? source.Id == destination.Id : source[column].Equals(destination[column]));
             return (from sourceItem in sourceItems
                     from destinationItem in destinationItems
                     where isEqual(sourceItem, destinationItem)
-                    let lookups = ExtractLookupIds(sourceItem[sourceLookup.InternalName])
+                    let lookups = lookupValueHandler.Extract(sourceItem[sourceLookup.InternalName])
                     select
                         new MasterItemMapping
                             {
@@ -164,8 +166,9 @@ namespace Migrate
                 if(!mapping.DestinationLookupIds.Any() || !mapping.SourceLookupIds.Any())
                     continue;
 
-                object value = destinationLookup.AllowMultipleValues ? (object) mapping.DestinationLookupIds.Select( id => new FieldLookupValue { LookupId = id} ).ToArray()
-                                   : new FieldLookupValue { LookupId = mapping.DestinationLookupIds.First() };
+                var creator = LookupValueHandlerFactory.Create(destinationLookup.FieldTypeKind);
+                object value = destinationLookup.AllowMultipleValues ? mapping.DestinationLookupIds.Select(creator.Create).ToArray()
+                                   : creator.Create(mapping.DestinationLookupIds.First());
                 destinationItem[destinationLookup.InternalName] = value;
                 destinationItem.Update();
                 batchedItems++;
@@ -191,16 +194,6 @@ namespace Migrate
                 if (lookupMappings.TryGetValue(lookup, out mapping))
                     yield return mapping.DestinationId;
             }
-        }
-
-        private static int[] ExtractLookupIds(object lookupField)
-        {
-            var single = lookupField as FieldLookupValue;
-            if(single != null)
-                return new[]{ single.LookupId};
-
-            var multiple = lookupField as FieldLookupValue[];
-            return multiple == null ? new int[0] : multiple.Select(l => l.LookupId).ToArray();
         }
 
         private static Web GetWeb(ClientContext context)
@@ -260,7 +253,7 @@ namespace Migrate
                 Environment.Exit(0);
             }
 
-            if (lookupField.FieldTypeKind != FieldType.Lookup)
+            if (lookupField.FieldTypeKind != FieldType.Lookup && lookupField.FieldTypeKind != FieldType.User)
             {
                 Console.Error.WriteLine("Field \"{0}\" in {1} is not a lookup", lookupName, source);
                 Environment.Exit(0);
